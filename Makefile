@@ -31,3 +31,4 @@ $(TARGET2): $(SRCS2)
 # Clean target: Remove both executables
 clean:
 	rm -f $(TARGET1) $(TARGET2)
+	rm -f assets/Breugel_modified.png

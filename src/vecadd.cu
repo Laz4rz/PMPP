@@ -52,7 +52,7 @@ void vecMulKernel(float *A, float *B, float *C, int n) {
 // current max threads per block is 1024 (4th edition of PMPP)
 void devvecadd(float *A_h, float *B_h, float *C_h, int n) {
     int size = n * sizeof(float);
-    float * A_d, *B_d, *C_d;
+    float *A_d, *B_d, *C_d;
 
     cudaMallocGuard((void **)&A_d, size);
     cudaMallocGuard((void **)&B_d, size);
