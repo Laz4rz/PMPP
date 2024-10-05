@@ -8,11 +8,11 @@ LIB_DIR = lib
 
 # Output executable names
 TARGET1 = vecadd
-TARGET2 = greyscaleimage
+TARGET2 = grayscaleimage
 
 # Source files for each target
 SRCS1 = $(SRC_DIR)/vecadd.cu $(LIB_DIR)/cuda_helper.cu
-SRCS2 = $(SRC_DIR)/greyscaleimage.cu $(LIB_DIR)/cuda_helper.cu
+SRCS2 = $(SRC_DIR)/grayscaleimage.cu $(LIB_DIR)/cuda_helper.cu
 
 # Include directories
 INCLUDES = -I$(INCLUDE_DIR)
