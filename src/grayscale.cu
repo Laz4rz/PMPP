@@ -39,7 +39,7 @@ void grayscaleGPU(unsigned char *img_h, int width, int height, int channels) {
     cudaMemcpy(img_d, img_h, size, cudaMemcpyHostToDevice);
 
     dim3 dimBlock(16, 16, 1);
-    dim3 dimGrid(((width * channels) + dimBlock.x - 1.) / dimBlock.x, (height + dimBlock.y- 1.) / dimBlock.y, 1);
+    dim3 dimGrid((width + dimBlock.x - 1.) / dimBlock.x, (height + dimBlock.y- 1.) / dimBlock.y, 1);
     printf("dimGrid: %d, %d, %d\ndimBlock: %d, %d, %d\nTotal threads: %d\n", dimGrid.x, dimGrid.y, dimGrid.z, dimBlock.x, dimBlock.y, dimBlock.z, dimGrid.x * dimGrid.y * dimBlock.x * dimBlock.y);
     
     grayscaleKernel<<<dimGrid, dimBlock>>>(img_d, width, height, channels);
@@ -86,8 +86,8 @@ int main() {
     grayscaleGPU(img, width, height, channels);
 
     // Save the modified image to a new file
-    if (stbi_write_png("assets/Breugel_modified.png", width, height, channels, img, width * channels)) {
-    // if (stbi_write_png("assets/test_block_modified.png", width, height, channels, img, width * channels)) {
+    if (stbi_write_png("assets/Breugel_grayscale.png", width, height, channels, img, width * channels)) {
+    // if (stbi_write_png("assets/test_block_grayscale.png", width, height, channels, img, width * channels)) {
         printf("Image saved successfully\n");
     } else {
         printf("Failed to save image\n");
