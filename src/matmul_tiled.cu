@@ -4,19 +4,41 @@
 #include <math.h>
 #include "cuda_helper.h"
 
+#define TILE_WIDTH 16
+
 // Assuming row-major matrices 
 
+// that is quite convoluted in PMPP, but the code looks as it does
+// cause the TILE_WIDTH is equal to blockDim.x and blockDim.y
+// it doesnt have to be (and usually isnt?), but... simplicity 
+// we only care about 
 __global__
 void matmulKernel(float *A, float *B, float *C, int n) {
-    int x = threadIdx.x + blockDim.x * blockIdx.x;
-    int y = threadIdx.y + blockDim.y * blockIdx.y;
+    __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
+    __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
 
-    if (x < n && y < n) {
-        int acc = 0;
-        for(int i=0; i<n; i++) {
-            acc += A[y * n + i] * B[i * n + x];
+    int tx = threadIdx.x; int ty = threadIdx.y;
+    int bx = blockIdx.x; int by = blockIdx.y;
+
+    int row = by * TILE_WIDTH + ty;
+    int column = bx * TILE_WIDTH + tx;
+
+    if (column < n & row < n) {
+        float acc = 0;
+        for (int tile=0; tile<(n + TILE_WIDTH - 1)/TILE_WIDTH; ++tile) {
+            // moving horizontally
+            // [row][column]
+            Mds[ty][tx] = A[row * n + tile * TILE_WIDTH + tx];
+            // moving vertically
+            Nds[ty][tx] = B[tile * TILE_WIDTH * n + ty * n + column];
+            __syncthreads();
+            
+            for (int i=0; i<TILE_WIDTH; ++i) {
+                acc += Mds[ty][i] * Nds[i][tx];
+            }
+            __syncthreads();
         }
-        C[y * n + x] = acc;
+        C[row * n + column] = acc; 
     }
 }
 
@@ -44,8 +66,9 @@ void matmul(float *A_h, float *B_h, float *C_h, int n) {
 
     float maxThreadsPerDim = sqrt(prop.maxThreadsPerBlock);
     printf("maxThreadsPerDim: %f\n", maxThreadsPerDim);
-    dim3 dimGrid(ceil(n / maxThreadsPerDim), ceil(n / maxThreadsPerDim), 1);
-    dim3 dimBlock(maxThreadsPerDim, maxThreadsPerDim, 1);
+    float threads = TILE_WIDTH;
+    dim3 dimGrid(ceil(n / threads), ceil(n / threads), 1);
+    dim3 dimBlock(threads, threads, 1);
     printf("dimGrid: %d, %d, %d\ndimBlock: %d, %d, %d\n", dimGrid.x, dimGrid.y, dimGrid.z, dimBlock.x, dimBlock.y, dimBlock.z);
 
     matmulKernel<<<dimGrid, dimBlock>>>(A_d, B_d, C_d, n);
@@ -64,7 +87,7 @@ void matmul(float *A_h, float *B_h, float *C_h, int n) {
 int main() {
     srand(0);
 
-    int n = 2;
+    int n = 32;
     int nn = n * n;
     float *a = (float *)malloc(nn * sizeof(float));
     float *b = (float *)malloc(nn * sizeof(float));
