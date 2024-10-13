@@ -23,22 +23,31 @@ void matmulKernel(float *A, float *B, float *C, int n) {
     int row = by * TILE_WIDTH + ty;
     int column = bx * TILE_WIDTH + tx;
 
-    if (column < n & row < n) {
-        float acc = 0;
+        float acc = 0.0;
+
+        // this for-loop is called strip-mining
+        // takes a long running loop and breaks it into parts
         for (int tile=0; tile<(n + TILE_WIDTH - 1)/TILE_WIDTH; ++tile) {
             // moving horizontally
             // [row][column]
-            Mds[ty][tx] = A[row * n + tile * TILE_WIDTH + tx];
+            Mds[ty][tx] = (row < n && tile * TILE_WIDTH + tx < n)
+                ? A[row * n + tile * TILE_WIDTH + tx]
+                : 0.0f;
             // moving vertically
-            Nds[ty][tx] = B[tile * TILE_WIDTH * n + ty * n + column];
-            __syncthreads();
+            Nds[ty][tx] = (column < n && (ty + tile * TILE_WIDTH ) < n)
+            ? B[tile * TILE_WIDTH * n + ty * n + column]
+            : 0.0f;
+            __syncthreads(); // read-after-write (true dependence)
             
             for (int i=0; i<TILE_WIDTH; ++i) {
                 acc += Mds[ty][i] * Nds[i][tx];
             }
             __syncthreads();
+            // write-after-read (false dependence)
+        // decreases the number of global memory accesses by factor of TILE_WIDTH
         }
-        C[row * n + column] = acc; 
+    if (row < n && column < n) {
+        C[row * n + column] = acc;
     }
 }
 
@@ -67,7 +76,7 @@ void matmul(float *A_h, float *B_h, float *C_h, int n) {
     float maxThreadsPerDim = sqrt(prop.maxThreadsPerBlock);
     printf("maxThreadsPerDim: %f\n", maxThreadsPerDim);
     float threads = TILE_WIDTH;
-    dim3 dimGrid(ceil(n / threads), ceil(n / threads), 1);
+    dim3 dimGrid((n + TILE_WIDTH - 1) / TILE_WIDTH, (n + TILE_WIDTH - 1) / TILE_WIDTH, 1);
     dim3 dimBlock(threads, threads, 1);
     printf("dimGrid: %d, %d, %d\ndimBlock: %d, %d, %d\n", dimGrid.x, dimGrid.y, dimGrid.z, dimBlock.x, dimBlock.y, dimBlock.z);
 
@@ -87,7 +96,7 @@ void matmul(float *A_h, float *B_h, float *C_h, int n) {
 int main() {
     srand(0);
 
-    int n = 32;
+    int n = 2;
     int nn = n * n;
     float *a = (float *)malloc(nn * sizeof(float));
     float *b = (float *)malloc(nn * sizeof(float));
