@@ -27,15 +27,18 @@ void matmulKernel(float *A, float *B, float *C, int m, int n, int o) {
     int column = bx * TILE_WIDTH + tx;
 
     float acc = 0.0;
+    int globMemAcc = 0;
 
     for (int tile=0; tile<(n + TILE_WIDTH - 1)/TILE_WIDTH; ++tile) {
 
         if (row < m && tile * TILE_WIDTH + tx < n) {
             Mds[ty][tx] = A[row * n + tx + tile * TILE_WIDTH];
+            globMemAcc += 1;
         }
 
         if (column < o && (ty + tile * TILE_WIDTH ) < n) {
             Nds[ty][tx] =  B[column + ty * o + tile * TILE_WIDTH * o];
+            globMemAcc += 1;
         }
         __syncthreads();                           
   
@@ -44,7 +47,7 @@ void matmulKernel(float *A, float *B, float *C, int m, int n, int o) {
         }
         __syncthreads();
     }
-
+    printf("Thread (%d, %d) accessed %d global memory locations\\n", row, column, globMemAcc);
     if (row < m && column < o) {
         C[row * o + column] = acc;
     }
