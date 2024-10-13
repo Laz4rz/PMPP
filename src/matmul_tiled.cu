@@ -17,8 +17,10 @@ void matmulKernel(float *A, float *B, float *C, int n) {
     __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
     __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
 
-    int tx = threadIdx.x; int ty = threadIdx.y;
-    int bx = blockIdx.x; int by = blockIdx.y;
+    int tx = threadIdx.x; 
+    int ty = threadIdx.y;
+    int bx = blockIdx.x; 
+    int by = blockIdx.y;
 
     int row = by * TILE_WIDTH + ty;
     int column = bx * TILE_WIDTH + tx;
@@ -30,13 +32,11 @@ void matmulKernel(float *A, float *B, float *C, int n) {
         for (int tile=0; tile<(n + TILE_WIDTH - 1)/TILE_WIDTH; ++tile) {
             // moving horizontally
             // [row][column]
-            Mds[ty][tx] = (row < n && tile * TILE_WIDTH + tx < n)
-                ? A[row * n + tile * TILE_WIDTH + tx]
-                : 0.0f;
+            if (row < n && tile * TILE_WIDTH + tx < n)
+                Mds[ty][tx] = A[row * n + tile * TILE_WIDTH + tx];
             // moving vertically
-            Nds[ty][tx] = (column < n && (ty + tile * TILE_WIDTH ) < n)
-            ? B[tile * TILE_WIDTH * n + ty * n + column]
-            : 0.0f;
+            if (column < n && (ty + tile * TILE_WIDTH ) < n) 
+                Nds[ty][tx] =  B[tile * TILE_WIDTH * n + ty * n + column];
             __syncthreads(); // read-after-write (true dependence)
             
             for (int i=0; i<TILE_WIDTH; ++i) {
