@@ -13,7 +13,7 @@
 // it doesnt have to be (and usually isnt?), but... simplicity 
 // we only care about 
 __global__
-void matmulKernel(float *A, float *B, float *C, int n) {
+void matmulKernel(float *A, float *B, float *C, int m, int n, int o) {
     __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
     __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
 
@@ -25,29 +25,40 @@ void matmulKernel(float *A, float *B, float *C, int n) {
     int row = by * TILE_WIDTH + ty;
     int column = bx * TILE_WIDTH + tx;
 
-        float acc = 0.0;
+    float acc = 0.0;
+    int globMemAcc = 0;
+    float temp;
 
-        // this for-loop is called strip-mining
-        // takes a long running loop and breaks it into parts
-        for (int tile=0; tile<(n + TILE_WIDTH - 1)/TILE_WIDTH; ++tile) {
-            // moving horizontally
-            // [row][column]
-            if (row < n && tile * TILE_WIDTH + tx < n)
-                Mds[ty][tx] = A[row * n + tile * TILE_WIDTH + tx];
-            // moving vertically
-            if (column < n && (ty + tile * TILE_WIDTH ) < n) 
-                Nds[ty][tx] =  B[tile * TILE_WIDTH * n + ty * n + column];
-            __syncthreads(); // read-after-write (true dependence)
-            
-            for (int i=0; i<TILE_WIDTH; ++i) {
-                acc += Mds[ty][i] * Nds[i][tx];
-            }
-            __syncthreads();
-            // write-after-read (false dependence)
-        // decreases the number of global memory accesses by factor of TILE_WIDTH
+    for (int tile=0; tile<(n + TILE_WIDTH - 1)/TILE_WIDTH; ++tile) {
+
+        if (row < m && tile * TILE_WIDTH + tx < n) {
+            Mds[ty][tx] = A[row * n + tx + tile * TILE_WIDTH];
+            globMemAcc += 1;
         }
-    if (row < n && column < n) {
-        C[row * n + column] = acc;
+        else {
+            Mds[ty][tx] = 0.0;
+        }
+
+        if (column < o && (ty + tile * TILE_WIDTH ) < n) {
+            Nds[ty][tx] =  B[column + ty * o + tile * TILE_WIDTH * o];
+            globMemAcc += 1;
+        }
+        else {
+            Nds[ty][tx] = 0.0;
+        }
+        __syncthreads();                           
+  
+        for (int i=0; i<TILE_WIDTH; ++i) {
+            temp = Mds[ty][i] * Nds[i][tx];
+            // if (column == 0 && row == 0) 
+                // printf("Mds[%d][%d] * Nds[%d][%d] = %f * %f = %d\\n", ty, i, i, tx, Mds[ty][i], Nds[i][tx], temp);
+            acc += temp;
+        }
+        __syncthreads();
+    }
+    // printf("Thread (%d, %d) accessed %d global memory locations\\n", row, column, globMemAcc);
+    if (row < m && column < o) {
+        C[row * o + column] = acc;
     }
 }
 
@@ -80,7 +91,7 @@ void matmul(float *A_h, float *B_h, float *C_h, int n) {
     dim3 dimBlock(threads, threads, 1);
     printf("dimGrid: %d, %d, %d\ndimBlock: %d, %d, %d\n", dimGrid.x, dimGrid.y, dimGrid.z, dimBlock.x, dimBlock.y, dimBlock.z);
 
-    matmulKernel<<<dimGrid, dimBlock>>>(A_d, B_d, C_d, n);
+    matmulKernel<<<dimGrid, dimBlock>>>(A_d, B_d, C_d, n, n, n);
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
